@@ -1,74 +1,110 @@
 import socket
 import pickle
+from threading import Thread
+import math
 
-class ClienteRPC:
-    def _init_(self, host="localhost", porta=5000):
+class Calculadora:
+    """Classe que encapsula as operações matemáticas."""
+    @staticmethod
+    def somar(a, b):
+        return a + b
+
+    @staticmethod
+    def subtrair(a, b):
+        return a - b
+
+    @staticmethod
+    def multiplicar(a, b):
+        return a * b
+
+    @staticmethod
+    def dividir(a, b):
+        if b == 0:
+            raise ValueError("Divisão por zero não é permitida.")
+        return a / b
+
+    @staticmethod
+    def potencia(base, expoente):
+        return math.pow(base, expoente)
+
+    @staticmethod
+    def raiz_quadrada(a):
+        if a < 0:
+            raise ValueError("Raiz quadrada de número negativo não é permitida.")
+        return math.sqrt(a)
+
+class ServidorRPC:
+    def __init__(self, host="localhost", porta=5000):
         self.host = host
         self.porta = porta
+        self.metodos_rpc = {}  # Dicionário de métodos disponíveis
 
-    def chamar_metodo(self, metodo, parametros):
-        """Envia uma solicitação RPC ao servidor."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
-                cliente.connect((self.host, self.porta))
-                requisicao = {"metodo": metodo, "parametros": parametros}
-                cliente.send(pickle.dumps(requisicao))
+    def registrar_metodo(self, nome, func):
+        """Registra um método RPC."""
+        self.metodos_rpc[nome] = func
+
+    def handle_client(self, conn, addr):
+        print(f"Conexão de {addr}")
+        while True:
+            try:
+                data = conn.recv(1024)
+                if not data:
+                    print(f"Conexão encerrada por {addr}")
+                    break
 
                 try:
-                    resposta = pickle.loads(cliente.recv(1024))
-                    return resposta
+                    request = pickle.loads(data)
+                    metodo = request.get("metodo")
+                    parametros = request.get("parametros", [])
+                    
+                    if metodo in self.metodos_rpc:
+                        try:
+                            resultado = self.metodos_rpc[metodo](*parametros)
+                            response = {"status": "sucesso", "resultado": resultado}
+                        except Exception as e:
+                            response = {"status": "erro", "mensagem": f"Erro na execução do método: {e}"}
+                    else:
+                        response = {"status": "erro", "mensagem": "Método não encontrado"}
                 except (pickle.UnpicklingError, AttributeError) as e:
-                    return {"status": "erro", "mensagem": f"Erro ao decodificar resposta do servidor: {e}"}
-        except ConnectionRefusedError:
-            return {"status": "erro", "mensagem": "Não foi possível conectar ao servidor"}
-        except Exception as e:
-            return {"status": "erro", "mensagem": f"Erro inesperado: {e}"}
+                    response = {"status": "erro", "mensagem": f"Erro ao decodificar a solicitação: {e}"}
 
-if _name_ == "_main_":
-    cliente = ClienteRPC()
-    operacoes = {
-        1: "soma",
-        2: "subtração",
-        3: "multiplicação",
-        4: "divisão",
-        5: "potencia",
-        6: "raiz_quadrada"
-    }
+                conn.send(pickle.dumps(response))
 
-    try:
-        # Entrada do primeiro número
-        numero1 = float(input("Digite o primeiro número: ").strip())
+            except ConnectionResetError:
+                print(f"Conexão perdida com {addr}")
+                break
+            except Exception as e:
+                print(f"Erro inesperado com {addr}: {e}")
+                break
+        conn.close()
 
-        # Exibir opções para o usuário
-        print("\nEscolha a operação:")
-        for chave, valor in operacoes.items():
-            print(f"{chave} - {valor.capitalize()}")
+    def iniciar(self):
+        """Inicia o servidor para escutar conexões."""
+        servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        servidor.bind((self.host, self.porta))
+        servidor.listen(5)
+        print(f"Servidor iniciado em {self.host}:{self.porta}")
+        while True:
+            try:
+                conn, addr = servidor.accept()
+                thread = Thread(target=self.handle_client, args=(conn, addr))
+                thread.start()
+            except KeyboardInterrupt:
+                print("Servidor encerrado.")
+                break
+            except Exception as e:
+                print(f"Erro ao aceitar conexões: {e}")
 
-        escolha = int(input("Digite o número correspondente à operação: ").strip())
-        operacao = operacoes.get(escolha)
+if __name__ == "__main__":
+    servidor = ServidorRPC()
+    calculadora = Calculadora()
 
-        if not operacao:
-            print("Erro: Operação inválida.")
-            exit()
+    # Registrando os métodos da calculadora
+    servidor.registrar_metodo("somar", calculadora.somar)
+    servidor.registrar_metodo("subtrair", calculadora.subtrair)
+    servidor.registrar_metodo("multiplicar", calculadora.multiplicar)
+    servidor.registrar_metodo("dividir", calculadora.dividir)
+    servidor.registrar_metodo("potencia", calculadora.potencia)
+    servidor.registrar_metodo("raiz_quadrada", calculadora.raiz_quadrada)
 
-        # Configurar os parâmetros conforme a operação
-        if operacao == "raiz_quadrada":
-            parametros = [numero1]
-        elif operacao == "potencia":
-            numero2 = float(input("Digite o segundo número (expoente): ").strip())
-            parametros = [numero1, numero2]
-        elif operacao in ["soma", "subtração", "multiplicação", "divisão"]:
-            numero2 = float(input("Digite o segundo número: ").strip())
-            parametros = [numero1, numero2]
-        else:
-            print("Erro: Operação não reconhecida.")
-            exit()
-
-        # Chamar o método e exibir a resposta
-        resposta = cliente.chamar_metodo(operacao, parametros)
-        print("\nResposta do servidor:", resposta)
-
-    except ValueError:
-        print("Erro: Por favor, insira valores numéricos válidos.")
-    except KeyboardInterrupt:
-        print("\nCliente encerrado pelo usuário.")
+    servidor.iniciar()
