@@ -2,7 +2,7 @@ import socket
 import pickle
 
 class ClienteRPC:
-    def _init_(self, host="localhost", porta=5000):
+    def __init__(self, host="localhost", porta=5000):
         self.host = host
         self.porta = porta
 
@@ -24,51 +24,63 @@ class ClienteRPC:
         except Exception as e:
             return {"status": "erro", "mensagem": f"Erro inesperado: {e}"}
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     cliente = ClienteRPC()
     operacoes = {
-        1: "soma",
-        2: "subtração",
-        3: "multiplicação",
-        4: "divisão",
+        1: "somar",
+        2: "subtrair",
+        3: "multiplicar",
+        4: "dividir",
         5: "potencia",
         6: "raiz_quadrada"
     }
 
-    try:
-        # Entrada do primeiro número
-        numero1 = float(input("Digite o primeiro número: ").strip())
+    while True:
+        try:
+            # Entrada do primeiro número
+            numero1 = float(input("Digite o primeiro número: ").strip())
 
-        # Exibir opções para o usuário
-        print("\nEscolha a operação:")
-        for chave, valor in operacoes.items():
-            print(f"{chave} - {valor.capitalize()}")
+            # Exibir opções para o usuário
+            print("\nEscolha a operação:")
+            for chave, valor in operacoes.items():
+                print(f"{chave} - {valor.replace('_', ' ').capitalize()}")
 
-        escolha = int(input("Digite o número correspondente à operação: ").strip())
-        operacao = operacoes.get(escolha)
+            escolha = int(input("Digite o número correspondente à operação: ").strip())
+            operacao = operacoes.get(escolha)
 
-        if not operacao:
-            print("Erro: Operação inválida.")
-            exit()
+            if not operacao:
+                print("Erro: Operação inválida.")
+                continue
 
-        # Configurar os parâmetros conforme a operação
-        if operacao == "raiz_quadrada":
-            parametros = [numero1]
-        elif operacao == "potencia":
-            numero2 = float(input("Digite o segundo número (expoente): ").strip())
-            parametros = [numero1, numero2]
-        elif operacao in ["soma", "subtração", "multiplicação", "divisão"]:
-            numero2 = float(input("Digite o segundo número: ").strip())
-            parametros = [numero1, numero2]
-        else:
-            print("Erro: Operação não reconhecida.")
-            exit()
+            # Configurar os parâmetros conforme a operação
+            if operacao == "raiz_quadrada":
+                parametros = [numero1]
+            elif operacao == "potencia":
+                numero2 = float(input("Digite o segundo número (expoente): ").strip())
+                parametros = [numero1, numero2]
+            elif operacao in ["somar", "subtrair", "multiplicar", "dividir"]:
+                numero2 = float(input("Digite o segundo número: ").strip())
+                parametros = [numero1, numero2]
+            else:
+                print("Erro: Operação não reconhecida.")
+                continue
 
-        # Chamar o método e exibir a resposta
-        resposta = cliente.chamar_metodo(operacao, parametros)
-        print("\nResposta do servidor:", resposta)
+            # Chamar o método e exibir a resposta
+            resposta = cliente.chamar_metodo(operacao, parametros)
 
-    except ValueError:
-        print("Erro: Por favor, insira valores numéricos válidos.")
-    except KeyboardInterrupt:
-        print("\nCliente encerrado pelo usuário.")
+            if resposta["status"] == "sucesso":
+                print(f"\nResultado: {resposta['resultado']}")
+            else:
+                print(f"\nErro: {resposta['mensagem']}")
+
+        except ValueError:
+            print("Erro: Por favor, insira valores numéricos válidos.")
+        except KeyboardInterrupt:
+            print("\nCliente encerrado pelo usuário.")
+            break
+
+        # Opção de continuar ou sair
+        continuar = input("\nDeseja realizar outra operação? (s/n): ").strip().lower()
+        if continuar != 's':
+            print("Cliente Encerrado!")
+            break
